@@ -1,0 +1,3 @@
+[submodule "petrovich_private_keys"]
+	path = petrovich_private_keys
+	url = https://github.com/zanaviska/petrovich_private_keys
