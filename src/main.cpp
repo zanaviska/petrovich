@@ -8,6 +8,9 @@
 
 namespace fs = std::filesystem;
 
+// random generator function:
+int myrandom (int i) { return std::rand()%i;}
+
 struct path_leaf_string
 {
     std::string operator()(const fs::directory_entry& entry) const
@@ -26,6 +29,7 @@ void read_directory(const std::string& name, std::vector<std::string>& v)
 
 int main()
 {
+    std::srand ( unsigned ( std::time(0) ) );
     //get api key
     std::ifstream key_reader("petrovich_private_keys/key");
     std::string api_key;
@@ -45,7 +49,7 @@ int main()
     //get files for petrovich command
     std::vector<std::string> pathes;
     read_directory("photos", pathes);
-
+    std::random_shuffle(pathes.begin(), pathes.end());
     bot.getEvents().onCommand("petrovich", [&bot, &pathes/*, &opened, &ths*/](TgBot::Message::Ptr message)
     {
         static size_t idx = 0;
@@ -58,6 +62,9 @@ int main()
         //     std::cout << "out";
         // }
     });
+    while(1)
+    {
+
     try {
         printf("Bot username: %s\n", bot.getApi().getMe()->username.c_str());
         TgBot::TgLongPoll longPoll(bot);
@@ -68,5 +75,8 @@ int main()
     } catch (TgBot::TgException& e) {
         std::cout << "AAAAAA\n";
         printf("error: %s\n", e.what());
+    }
+    catch(...)
+    {}
     }
 }
