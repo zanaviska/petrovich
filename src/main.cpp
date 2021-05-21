@@ -1,8 +1,28 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <vector>
+#include <filesystem>
 
 #include <tgbot/tgbot.h>
+
+namespace fs = std::filesystem;
+
+struct path_leaf_string
+{
+    std::string operator()(const fs::directory_entry& entry) const
+    {
+        return entry.path().string();
+    }
+};
+
+void read_directory(const std::string& name, std::vector<std::string>& v)
+{
+    fs::path p(name);
+    fs::directory_iterator start(p);
+    fs::directory_iterator end;
+    std::transform(start, end, std::back_inserter(v), path_leaf_string());
+}
 
 int main()
 {
@@ -22,10 +42,15 @@ int main()
     //     //bot.getApi().sendMessage(message->chat->id, "Your message is: " + message->text);
     // });
 
-    //petrovuch command
-    bot.getEvents().onCommand("petrovich", [&bot/*, &opened, &ths*/](TgBot::Message::Ptr message)
+    //get files for petrovich command
+    std::vector<std::string> pathes;
+    read_directory("photos", pathes);
+
+    bot.getEvents().onCommand("petrovich", [&bot, &pathes/*, &opened, &ths*/](TgBot::Message::Ptr message)
     {
+        static size_t idx = 0;
         std::cout << "received photo requst\n";
+        auto msg = bot.getApi().sendPhoto(message->chat->id, TgBot::InputFile::fromFile(pathes[(idx++)%pathes.size()], "image/jpeg"));
         // if(!opened[message->chat->id])
         // {
         //     opened[message->chat->id] = true;
