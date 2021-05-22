@@ -48,12 +48,19 @@ int main()
 
     //get files for petrovich command
     std::vector<std::string> pathes;
+    pathes.
     read_directory("photos", pathes);
     std::random_shuffle(pathes.begin(), pathes.end());
     bot.getEvents().onCommand("petrovich", [&bot, &pathes/*, &opened, &ths*/](TgBot::Message::Ptr message)
     {
         static size_t idx = 0;
-        std::cout << "received photo requst\n";
+        // std::cout << "received photo requst\n";
+        std::cout << "petrovich idx: " << idx << " time: " << message->date << " chat: " << message->chat->id << " sender: " << message->from->username << '\n';
+        if(message->chat->id == -1001189961610)
+        {
+            std::cout << "Doesn't work in IP-01\n";
+            return;
+        }
         auto msg = bot.getApi().sendPhoto(message->chat->id, TgBot::InputFile::fromFile(pathes[(idx++)%pathes.size()], "image/jpeg"));
         // if(!opened[message->chat->id])
         // {
@@ -69,7 +76,7 @@ int main()
         printf("Bot username: %s\n", bot.getApi().getMe()->username.c_str());
         TgBot::TgLongPoll longPoll(bot);
         while (true) {
-            printf("Long poll started\n");
+            // printf("Long poll started\n");
             longPoll.start();
         }
     } catch (TgBot::TgException& e) {
