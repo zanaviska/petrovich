@@ -53,6 +53,8 @@ int main()
 
     read_directory("photos", pathes);
     std::random_shuffle(pathes.begin(), pathes.end());
+
+    // petrovich command
     bot.getEvents().onCommand(
         "petrovich",
         [&bot, &pathes /*, &opened, &ths*/](TgBot::Message::Ptr message)
@@ -70,16 +72,11 @@ int main()
             auto msg = bot.getApi().sendPhoto(
                 message->chat->id,
                 TgBot::InputFile::fromFile(pathes[(idx++) % pathes.size()], "image/jpeg"));
-            // if(!opened[message->chat->id])
-            // {
-            //     opened[message->chat->id] = true;
-            //     ths.push_back(std::thread{send_petrovich,std::ref(bot), message->chat->id,
-            //     message->chat->username, true}); std::cout << "out";
-            // }
         });
+
+    // infinite main loop
     while (1)
     {
-
         try
         {
             printf("Bot username: %s\n", bot.getApi().getMe()->username.c_str());
