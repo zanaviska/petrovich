@@ -1,12 +1,31 @@
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
+#include <queue>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <tgbot/tgbot.h>
 
 namespace fs = std::filesystem;
+using namespace std::chrono;
+
+void concat(std::stringstream &ss) {}
+
+template <typename T1, typename... T2> void concat(std::stringstream &ss, T1 arg1, T2... args)
+{
+    ss << arg1;
+    concat(ss, args...);
+}
+template <typename... T> void print(T... args)
+{
+    std::stringstream ss;
+    concat(ss, args...);
+    std::cout << ss.str();
+}
 
 // random generator function:
 int myrandom(int i)
@@ -28,8 +47,63 @@ void read_directory(const std::string &name, std::vector<std::string> &v)
     std::transform(start, end, std::back_inserter(v), path_leaf_string());
 }
 
+enum event_type
+{
+    send_hello,
+    check_user
+};
+
+struct event_loop_event
+{
+    event_type type;
+    int64_t chat_id;
+    int64_t member_id;
+    int64_t message_to_remove;
+    system_clock::time_point event_time;
+};
+
+void event_loop_func(TgBot::Bot &bot, std::queue<event_loop_event> &q, std::mutex &mtx)
+{
+    while (1)
+    {
+        mtx.lock();
+        if (q.empty())
+        {
+            mtx.unlock();
+            std::this_thread::sleep_for(1s);
+        }
+        else
+        {
+            auto now = q.front();
+            q.pop();
+            mtx.unlock();
+            std::this_thread::sleep_until(now.event_time);
+            if (now.type == send_hello)
+            {
+                print("user ", now.member_id, " was welcomed in chat ", now.chat_id, '\n');
+                const auto msg = bot.getApi().sendMessage(now.chat_id, "Дороу");
+                mtx.lock();
+                q.push({check_user, now.chat_id, now.member_id, msg->messageId,
+                        high_resolution_clock::now() + 62s});
+                mtx.unlock();
+            }
+            if (now.type == check_user)
+            {
+                const std::string status =
+                    bot.getApi().getChatMember(now.chat_id, now.member_id)->status;
+                if (status == "left" || status == "kicked")
+                {
+                    bot.getApi().deleteMessage(now.chat_id, now.message_to_remove);
+                    print("welcome in chat", now.chat_id, "removed\n");
+                }
+            }
+        }
+    }
+}
+
 const int64_t IP_01_chat_id = -1001189961610;
 const int64_t test_chat_id = -1001250428136;
+const int64_t FICT_talk_chat_id = -1001494680687;
 
 int main()
 {
@@ -46,27 +120,28 @@ int main()
     std::random_shuffle(pathes.begin(), pathes.end());
 
     // for counting chat members
-    std::map<int64_t, int32_t> member_count;
+    std::mutex mtx;
+
+    // event loop
+    std::queue<event_loop_event> events;
+    std::thread event_loop(event_loop_func, std::ref(bot), std::ref(events), std::ref(mtx));
 
     bot.getEvents().onAnyMessage(
-        [&bot, &pathes, &member_count](TgBot::Message::Ptr message)
+        [&bot, &pathes, &events, &mtx](TgBot::Message::Ptr message)
         {
-            if (message->chat->id == test_chat_id)
+            if (message->chat->id == FICT_talk_chat_id)
             {
-                std::cout << "User " << message->from->username << " in chat type "
-                          << message->chat->title << " wrote " << message->text << '\n';
-                // std::cout
-                //     << bot.getApi().getChatMember(message->chat->id, message->from->id)->status
-                //     << '\n';
-                int32_t real_chat_member_count =
-                    bot.getApi().getChatMembersCount(message->chat->id);
-                if (auto it = member_count.find(message->chat->id);
-                    it != member_count.end() && it->second < real_chat_member_count)
+                print("User ", message->from->username, " in chat type ", message->chat->title,
+                      " wrote ", message->text, '\n');
+                if (message->newChatMember)
                 {
-                    bot.getApi().sendMessage(message->chat->id, "Дороу");
-                }
+                    print("user ", message->from->id, " joined chat ", message->chat->title, '(',
+                          message->chat->id, ")\n");
+                    std::lock_guard lg{mtx};
 
-                member_count[message->chat->id] = real_chat_member_count;
+                    events.push({send_hello, message->chat->id, message->from->id, 0,
+                                 high_resolution_clock::now() + 2s});
+                }
             }
         });
 
@@ -77,9 +152,8 @@ int main()
         {
             static size_t idx = 0;
             // std::cout << "received photo requst\n";
-            std::cout << "petrovich idx: " << idx << " time: " << message->date
-                      << " chat: " << message->chat->id << " sender: " << message->from->username
-                      << '\n';
+            print("petrovich idx: ", idx, " time: ", message->date, " chat: ", message->chat->id,
+                  " sender: ", message->from->username, '\n');
             if (message->chat->id == IP_01_chat_id)
             {
                 std::cout << "Doesn't work in IP-01\n";
