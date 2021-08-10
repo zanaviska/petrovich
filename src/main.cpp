@@ -93,8 +93,15 @@ void event_loop_func(TgBot::Bot &bot, std::queue<event_loop_event> &q, std::mute
                     bot.getApi().getChatMember(now.chat_id, now.member_id)->status;
                 if (status == "left" || status == "kicked")
                 {
-                    bot.getApi().deleteMessage(now.chat_id, now.message_to_remove);
-                    print("welcome in chat", now.chat_id, "removed\n");
+                    try
+                    {
+                        bot.getApi().deleteMessage(now.chat_id, now.message_to_remove);
+                        print("welcome in chat ", now.chat_id, " removed\n");
+                    }
+                    catch (const std::exception &e)
+                    {
+                        print("welcome in chat ", now.chat_id, " was removed by some admin\n");
+                    }
                 }
             }
         }
