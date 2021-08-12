@@ -61,54 +61,53 @@ struct event_loop_event
     int64_t member_id;
     int64_t message_to_remove;
     system_clock::time_point event_time;
-    const bool operator<(const event_loop_event &rhs) const
-    {
-        if (type == rhs.type) return event_time < rhs.event_time;
-        if (type == send_hello) return 1;
-        return 0;
-    }
+    const bool operator<(const event_loop_event &rhs) const { return event_time < rhs.event_time; }
 };
 
 void event_loop_func(TgBot::Bot &bot, std::set<event_loop_event> &q, std::mutex &mtx)
 {
+#ifdef NDEBUG
+    auto remove_message_seconds = 62s;
+#else
+    auto remove_message_seconds = 17s;
+#endif
     while (1)
     {
-        mtx.lock();
-        if (q.empty())
+        std::this_thread::sleep_for(1s);
+        while (1)
         {
-            mtx.unlock();
-            std::this_thread::sleep_for(1s);
-        }
-        else
-        {
-            auto now = *q.begin();
-            q.erase(q.begin());
-            mtx.unlock();
-            std::this_thread::sleep_until(now.event_time);
-            if (now.type == send_hello)
+            event_loop_event top;
             {
-                print("user ", now.member_id, " was welcomed in chat ", now.chat_id, '\n');
-                const auto msg = bot.getApi().sendMessage(now.chat_id, "Дороу");
+                std::lock_guard lg{mtx};
+                if (q.empty()) break;
+                top = *q.begin();
+                if (top.event_time > high_resolution_clock::now()) break;
+                q.erase(q.begin());
+            }
+            if (top.type == send_hello)
+            {
+                print("user ", top.member_id, " was welcomed in chat ", top.chat_id, '\n');
+                const auto msg = bot.getApi().sendMessage(top.chat_id, "Дороу");
 
                 // lock mutex another time to add new element to queue
                 std::lock_guard lg{mtx};
-                q.insert({check_user, now.chat_id, now.member_id, msg->messageId,
-                          high_resolution_clock::now() + 62s});
+                q.insert({check_user, top.chat_id, top.member_id, msg->messageId,
+                          high_resolution_clock::now() + remove_message_seconds});
             }
-            if (now.type == check_user)
+            if (top.type == check_user)
             {
                 const std::string status =
-                    bot.getApi().getChatMember(now.chat_id, now.member_id)->status;
+                    bot.getApi().getChatMember(top.chat_id, top.member_id)->status;
                 if (status == "left" || status == "kicked")
                 {
                     try
                     {
-                        bot.getApi().deleteMessage(now.chat_id, now.message_to_remove);
-                        print("welcome in chat ", now.chat_id, " removed\n");
+                        bot.getApi().deleteMessage(top.chat_id, top.message_to_remove);
+                        print("welcome in chat ", top.chat_id, " removed\n");
                     }
                     catch (const std::exception &e)
                     {
-                        print("welcome in chat ", now.chat_id, " was removed by some admin\n");
+                        print("welcome in chat ", top.chat_id, " was removed by some admin\n");
                     }
                 }
             }
@@ -124,7 +123,7 @@ int main()
 {
     std::srand(unsigned(std::time(0)));
     // get api key
-#ifndef NDEBUG
+#ifdef NDEBUG
     std::ifstream key_reader("petrovich_private_keys/pocket_thanos_bot");
 #else
     std::ifstream key_reader("petrovich_private_keys/nona_test_bot");
@@ -149,10 +148,14 @@ int main()
     bot.getEvents().onAnyMessage(
         [&bot, &pathes, &events, &mtx](TgBot::Message::Ptr message)
         {
+#ifdef NDEBUG
             if (message->chat->id == FICT_talk_chat_id)
+#endif
             {
+                auto end = std::chrono::system_clock::now();
+                std::time_t end_time = std::chrono::system_clock::to_time_t(end);
                 print("User ", message->from->username, " in chat type ", message->chat->title,
-                      " wrote ", message->text, '\n');
+                      " wrote ", message->text, ' ', std::ctime(&end_time));
                 if (message->newChatMember)
                 {
                     print("user ", message->from->id, " joined chat ", message->chat->title, '(',
@@ -204,6 +207,7 @@ int main()
         }
         catch (...)
         {
+            std::cout << "main error\n";
         }
     }
 }
