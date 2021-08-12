@@ -4,10 +4,10 @@
 #include <iostream>
 #include <mutex>
 #include <queue>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
-#include <set>
 
 #include <tgbot/tgbot.h>
 
@@ -61,7 +61,7 @@ struct event_loop_event
     int64_t member_id;
     int64_t message_to_remove;
     system_clock::time_point event_time;
-    const bool operator <(const event_loop_event& rhs) const 
+    const bool operator<(const event_loop_event &rhs) const
     {
         if (type == rhs.type) return event_time < rhs.event_time;
         if (type == send_hello) return 1;
@@ -90,10 +90,10 @@ void event_loop_func(TgBot::Bot &bot, std::set<event_loop_event> &q, std::mutex 
                 print("user ", now.member_id, " was welcomed in chat ", now.chat_id, '\n');
                 const auto msg = bot.getApi().sendMessage(now.chat_id, "Дороу");
 
-                //lock mutex another time to add new element to queue
+                // lock mutex another time to add new element to queue
                 std::lock_guard lg{mtx};
                 q.insert({check_user, now.chat_id, now.member_id, msg->messageId,
-                        high_resolution_clock::now() + 62s});
+                          high_resolution_clock::now() + 62s});
             }
             if (now.type == check_user)
             {
@@ -124,7 +124,11 @@ int main()
 {
     std::srand(unsigned(std::time(0)));
     // get api key
-    std::ifstream key_reader("petrovich_private_keys/key");
+#ifndef NDEBUG
+    std::ifstream key_reader("petrovich_private_keys/pocket_thanos_bot");
+#else
+    std::ifstream key_reader("petrovich_private_keys/nona_test_bot");
+#endif
     std::string api_key;
     key_reader >> api_key;
     TgBot::Bot bot(api_key);
@@ -156,7 +160,7 @@ int main()
                     std::lock_guard lg{mtx};
 
                     events.insert({send_hello, message->chat->id, message->from->id, 0,
-                                 high_resolution_clock::now() + 2s});
+                                   high_resolution_clock::now() + 2s});
                 }
             }
         });
