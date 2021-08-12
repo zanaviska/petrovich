@@ -7,6 +7,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <set>
 
 #include <tgbot/tgbot.h>
 
@@ -60,9 +61,15 @@ struct event_loop_event
     int64_t member_id;
     int64_t message_to_remove;
     system_clock::time_point event_time;
+    const bool operator <(const event_loop_event& rhs) const 
+    {
+        if (type == rhs.type) return event_time < rhs.event_time;
+        if (type == send_hello) return 1;
+        return 0;
+    }
 };
 
-void event_loop_func(TgBot::Bot &bot, std::queue<event_loop_event> &q, std::mutex &mtx)
+void event_loop_func(TgBot::Bot &bot, std::set<event_loop_event> &q, std::mutex &mtx)
 {
     while (1)
     {
@@ -74,18 +81,19 @@ void event_loop_func(TgBot::Bot &bot, std::queue<event_loop_event> &q, std::mute
         }
         else
         {
-            auto now = q.front();
-            q.pop();
+            auto now = *q.begin();
+            q.erase(q.begin());
             mtx.unlock();
             std::this_thread::sleep_until(now.event_time);
             if (now.type == send_hello)
             {
                 print("user ", now.member_id, " was welcomed in chat ", now.chat_id, '\n');
                 const auto msg = bot.getApi().sendMessage(now.chat_id, "Дороу");
-                mtx.lock();
-                q.push({check_user, now.chat_id, now.member_id, msg->messageId,
+
+                //lock mutex another time to add new element to queue
+                std::lock_guard lg{mtx};
+                q.insert({check_user, now.chat_id, now.member_id, msg->messageId,
                         high_resolution_clock::now() + 62s});
-                mtx.unlock();
             }
             if (now.type == check_user)
             {
@@ -130,7 +138,8 @@ int main()
     std::mutex mtx;
 
     // event loop
-    std::queue<event_loop_event> events;
+    std::set<event_loop_event> events;
+    // std::queue<event_loop_event> events;
     std::thread event_loop(event_loop_func, std::ref(bot), std::ref(events), std::ref(mtx));
 
     bot.getEvents().onAnyMessage(
@@ -146,7 +155,7 @@ int main()
                           message->chat->id, ")\n");
                     std::lock_guard lg{mtx};
 
-                    events.push({send_hello, message->chat->id, message->from->id, 0,
+                    events.insert({send_hello, message->chat->id, message->from->id, 0,
                                  high_resolution_clock::now() + 2s});
                 }
             }
