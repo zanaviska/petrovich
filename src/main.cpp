@@ -76,6 +76,7 @@ void event_loop_func(TgBot::Bot &bot, std::queue<event_loop_event> &q, std::mute
         {
             auto now = q.front();
             q.pop();
+            mtx.unlock();
             std::this_thread::sleep_until(now.event_time);
             if (now.type == send_hello)
             {
@@ -88,7 +89,6 @@ void event_loop_func(TgBot::Bot &bot, std::queue<event_loop_event> &q, std::mute
             }
             if (now.type == check_user)
             {
-                mtx.unlock();
                 const std::string status =
                     bot.getApi().getChatMember(now.chat_id, now.member_id)->status;
                 if (status == "left" || status == "kicked")
